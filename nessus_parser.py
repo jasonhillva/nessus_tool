@@ -4,8 +4,50 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, PatternFill, Alignment
+from datetime import datetime
 
 class NessusParser:
+    def __init__(self, nessus_file=None):
+        """Initialize with an optional .nessus file path"""
+        self.nessus_file = nessus_file
+        
+    def parse(self):
+        """
+        Parse the .nessus file and return structured data
+        
+        Returns:
+            dict: Dictionary containing scan info and vulnerability data
+        """
+        if not self.nessus_file:
+            raise ValueError("No .nessus file specified")
+            
+        report_name, df = self.parse_nessus_file(self.nessus_file)
+        
+        # Extract scan information
+        scan_info = {
+            'Report Name': report_name,
+            'File Path': self.nessus_file,
+            'Date Processed': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        # Count vulnerabilities by severity
+        if df is not None and not df.empty:
+            severity_counts = df['Severity'].value_counts().to_dict()
+            scan_info.update({
+                'Critical': severity_counts.get('Critical', 0),
+                'High': severity_counts.get('High', 0),
+                'Medium': severity_counts.get('Medium', 0),
+                'Low': severity_counts.get('Low', 0),
+                'Info': severity_counts.get('Info', 0),
+                'Total': len(df)
+            })
+        
+        # Return structured data
+        return {
+            'scan_info': scan_info,
+            'vulnerabilities': df.to_dict('records') if df is not None and not df.empty else []
+        }
+
     @staticmethod
     def parse_nessus_file(nessus_file):
         """

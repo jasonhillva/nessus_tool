@@ -47,7 +47,13 @@ def connect():
         # Test connection
         client = NessusClient(url, username, password, verify_ssl)
         if not client.login():
-            flash('Failed to connect to Nessus server', 'danger')
+            # Check for common problems
+            if "https://" not in url.lower():
+                flash('URL must start with https://', 'warning')
+            elif not verify_ssl:
+                flash('Failed to connect to Nessus server. Check your credentials and make sure the server is running.', 'danger')
+            else:
+                flash('Failed to connect to Nessus server. If using a self-signed certificate, try unchecking "Verify SSL Certificate".', 'warning')
             return redirect(url_for('index'))
         
         flash('Successfully connected to Nessus server', 'success')

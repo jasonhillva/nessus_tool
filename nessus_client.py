@@ -11,6 +11,10 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 class NessusClient:
     def __init__(self, url, username, password, verify=False):
         """Initialize Nessus API client"""
+        # Ensure URL starts with https:// and has no trailing slash
+        if not url.lower().startswith('http'):
+            url = 'https://' + url
+        
         self.url = url.rstrip('/')
         self.username = username
         self.password = password
@@ -23,6 +27,7 @@ class NessusClient:
         payload = {'username': self.username, 'password': self.password}
         
         try:
+            print(f"[DEBUG] Attempting to connect to {self.url} with verify={self.verify}")
             response = requests.post(
                 f"{self.url}/session",
                 data=json.dumps(payload),
@@ -38,6 +43,14 @@ class NessusClient:
             else:
                 print(f"[ERROR] Login failed: {response.status_code} - {response.text}")
                 return False
+        except requests.exceptions.SSLError as e:
+            print(f"[ERROR] SSL Certificate error: {str(e)}")
+            print("[HINT] Your Nessus server likely uses a self-signed certificate. Try unchecking 'Verify SSL Certificate'")
+            return False
+        except requests.exceptions.ConnectionError as e:
+            print(f"[ERROR] Connection error: {str(e)}")
+            print("[HINT] Check if your Nessus server is running and the URL is correct")
+            return False
         except Exception as e:
             print(f"[ERROR] Connection error: {str(e)}")
             return False
