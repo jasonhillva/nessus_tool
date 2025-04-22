@@ -218,3 +218,186 @@ class NessusClient:
         
         # Download the export
         return self.download_export(scan_id, file_id, output_path, filename)
+    
+    def list_scans(self):
+        """Get list of available scans"""
+        if not self.token:
+            if not self.login():
+                return {"error": "Failed to login to Nessus server"}
+        
+        try:
+            response = requests.get(
+                f"{self.url}/scans",
+                headers=self.headers,
+                verify=self.verify
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"[ERROR] Failed to get scan list: {response.status_code} - {response.text}")
+                return {"error": f"Failed to get scan list: {response.status_code}"}
+        except Exception as e:
+            print(f"[ERROR] Error retrieving scans: {str(e)}")
+            return {"error": f"Error retrieving scans: {str(e)}"}
+    
+    def create_scan(self, name, targets, template_uuid="731a8e52-3ea6-a291-ec0a-d2ff0619c19d", folder_id=None):
+        """
+        Create a new scan with the specified name and targets.
+        
+        Args:
+            name (str): Name of the scan
+            targets (str): Target IPs, hostnames, or ranges
+            template_uuid (str): Template UUID to use (default is basic network scan)
+            folder_id (int, optional): Folder ID to place the scan in
+            
+        Returns:
+            dict: Response containing the created scan information
+        """
+        if not self.token:
+            if not self.login():
+                return {"error": "Failed to login to Nessus server"}
+        
+        scan_data = {
+            "uuid": template_uuid,
+            "settings": {
+                "name": name,
+                "text_targets": targets
+            }
+        }
+        
+        if folder_id:
+            scan_data["settings"]["folder_id"] = folder_id
+        
+        try:
+            response = requests.post(
+                f"{self.url}/scans",
+                headers=self.headers,
+                data=json.dumps(scan_data),
+                verify=self.verify
+            )
+            
+            if response.status_code in [200, 201]:
+                print(f"[OK] Scan '{name}' created successfully")
+                return response.json()
+            else:
+                print(f"[ERROR] Failed to create scan: {response.status_code} - {response.text}")
+                return {"error": f"Failed to create scan: {response.status_code}"}
+        except Exception as e:
+            print(f"[ERROR] Error creating scan: {str(e)}")
+            return {"error": f"Error creating scan: {str(e)}"}
+    
+    def launch_scan(self, scan_id):
+        """
+        Launch a scan with the specified ID.
+        
+        Args:
+            scan_id (int): ID of the scan to launch
+            
+        Returns:
+            dict: Response containing the scan launch information
+        """
+        if not self.token:
+            if not self.login():
+                return {"error": "Failed to login to Nessus server"}
+        
+        try:
+            response = requests.post(
+                f"{self.url}/scans/{scan_id}/launch",
+                headers=self.headers,
+                verify=self.verify
+            )
+            
+            if response.status_code == 200:
+                print(f"[OK] Scan (ID: {scan_id}) launched successfully")
+                return response.json()
+            else:
+                print(f"[ERROR] Failed to launch scan: {response.status_code} - {response.text}")
+                return {"error": f"Failed to launch scan: {response.status_code}"}
+        except Exception as e:
+            print(f"[ERROR] Error launching scan: {str(e)}")
+            return {"error": f"Error launching scan: {str(e)}"}
+    
+    def get_scan_details(self, scan_id):
+        """
+        Get details of a specific scan.
+        
+        Args:
+            scan_id (int): ID of the scan
+            
+        Returns:
+            dict: Response containing the scan details
+        """
+        if not self.token:
+            if not self.login():
+                return {"error": "Failed to login to Nessus server"}
+        
+        try:
+            response = requests.get(
+                f"{self.url}/scans/{scan_id}",
+                headers=self.headers,
+                verify=self.verify
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"[ERROR] Failed to get scan details: {response.status_code} - {response.text}")
+                return {"error": f"Failed to get scan details: {response.status_code}"}
+        except Exception as e:
+            print(f"[ERROR] Error retrieving scan details: {str(e)}")
+            return {"error": f"Error retrieving scan details: {str(e)}"}
+    
+    def get_scan_templates(self):
+        """
+        Get a list of available scan templates.
+        
+        Returns:
+            dict: Response containing the template list
+        """
+        if not self.token:
+            if not self.login():
+                return {"error": "Failed to login to Nessus server"}
+        
+        try:
+            response = requests.get(
+                f"{self.url}/editor/scan/templates",
+                headers=self.headers,
+                verify=self.verify
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"[ERROR] Failed to get scan templates: {response.status_code} - {response.text}")
+                return {"error": f"Failed to get scan templates: {response.status_code}"}
+        except Exception as e:
+            print(f"[ERROR] Error retrieving scan templates: {str(e)}")
+            return {"error": f"Error retrieving scan templates: {str(e)}"}
+    
+    def get_folders(self):
+        """
+        Get a list of available folders.
+        
+        Returns:
+            dict: Response containing the folder list
+        """
+        if not self.token:
+            if not self.login():
+                return {"error": "Failed to login to Nessus server"}
+        
+        try:
+            response = requests.get(
+                f"{self.url}/folders",
+                headers=self.headers,
+                verify=self.verify
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"[ERROR] Failed to get folders: {response.status_code} - {response.text}")
+                return {"error": f"Failed to get folders: {response.status_code}"}
+        except Exception as e:
+            print(f"[ERROR] Error retrieving folders: {str(e)}")
+            return {"error": f"Error retrieving folders: {str(e)}"}

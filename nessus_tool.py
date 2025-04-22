@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import argparse
+import os
 from nessus_downloader import run_download_scans
 from nessus_converter import run_convert_nessus
+from web_app import run_webapp
 
 def main():
     """Main function to run the combined Nessus tool"""
     parser = argparse.ArgumentParser(
-        description='Nessus Tool - Download scans and convert .nessus files',
+        description='Nessus Tool - Download scans, convert .nessus files, and web interface',
         formatter_class=argparse.RawTextHelpFormatter
     )
     
@@ -63,6 +65,17 @@ def main():
     combined_parser.add_argument('-f', '--output-format', choices=['excel', 'csv'], default='excel',
                              help='Output format: excel or csv (default: excel)')
     
+    # Web mode (new)
+    web_parser = subparsers.add_parser('web', help='Start the web interface')
+    web_parser.add_argument('--host', default='0.0.0.0',
+                         help='Host to bind to (default: 0.0.0.0, all interfaces)')
+    web_parser.add_argument('-p', '--port', type=int, default=5000,
+                         help='Port to bind to (default: 5000)')
+    web_parser.add_argument('--debug', action='store_true',
+                         help='Enable debug mode')
+    web_parser.add_argument('--upload-folder', default='./uploads',
+                         help='Folder to store uploaded and processed files (default: ./uploads)')
+    
     args = parser.parse_args()
     
     # If no mode specified, print help and exit
@@ -105,6 +118,16 @@ def main():
             run_convert_nessus(convert_args)
         else:
             print("[WARNING] No scans were downloaded, skipping conversion step.")
+    
+    elif args.mode == 'web':
+        # Set environment variables for Flask
+        if args.upload_folder:
+            os.environ['UPLOAD_FOLDER'] = args.upload_folder
+            # Ensure upload directory exists
+            os.makedirs(args.upload_folder, exist_ok=True)
+        
+        # Run the web application
+        run_webapp(host=args.host, port=args.port, debug=args.debug)
 
 if __name__ == "__main__":
     main()

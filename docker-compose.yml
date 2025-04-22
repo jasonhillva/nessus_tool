@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  nessus-tool:
+    build: .
+    image: nessus-tool
+    container_name: nessus-tool
+    volumes:
+      - ./uploads:/app/uploads
+      - ./nessus_scans:/app/nessus_scans
+      - ./nessus_csv:/app/nessus_csv
+    environment:
+      - TZ=UTC
+      - SECRET_KEY=${SECRET_KEY:-default_secret_key_change_me}
+    ports:
+      - "5000:5000"
+    # Default command is to run the web interface
+    # To run CLI commands, override the command like this:
+    # docker-compose run --rm nessus-tool download -u https://your-nessus-server:8834 -n username -p password -i

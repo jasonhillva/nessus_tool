@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header">
+                <h3>Nessus Scanner Connection</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('connect') }}">
+                    <div class="mb-3">
+                        <label for="url" class="form-label">Nessus URL</label>
+                        <input type="text" class="form-control" id="url" name="url" placeholder="https://nessus.example.com:8834" required>
+                        <div class="form-text">Enter the URL of your Nessus scanner including port number</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="verify_ssl" name="verify_ssl" checked>
+                        <label class="form-check-label" for="verify_ssl">Verify SSL Certificate</label>
+                        <div class="form-text">Uncheck if your Nessus scanner uses a self-signed certificate</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Connect</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

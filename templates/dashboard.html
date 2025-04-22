@@ -1,0 +1,101 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<h2>Scan Dashboard</h2>
+
+<div class="mb-3">
+    <a href="{{ url_for('create_scan') }}" class="btn btn-primary">Create New Scan</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Available Scans</h3>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Last Modified</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if scans %}
+                        {% for scan in scans %}
+                        <tr>
+                            <td>{{ scan.id }}</td>
+                            <td>{{ scan.name }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if scan.status == 'completed' else 'warning' if scan.status == 'running' else 'secondary' }}">
+                                    {{ scan.status }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if scan.last_modification_date %}
+                                    {{ scan.last_modification_date|timestamp_to_datetime }}
+                                {% else %}
+                                    Never
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-success launch-scan" data-scan-id="{{ scan.id }}">Launch</button>
+                                <a href="{{ url_for('download_scan', scan_id=scan.id) }}" class="btn btn-sm btn-primary">Download</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">No scans available</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const launchButtons = document.querySelectorAll('.launch-scan');
+    
+    launchButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const scanId = this.getAttribute('data-scan-id');
+            
+            // Disable button while request is in progress
+            this.disabled = true;
+            this.innerHTML = 'Launching...';
+            
+            fetch(`/launch-scan/${scanId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Scan launched successfully');
+                    location.reload();
+                } else {
+                    alert('Failed to launch scan: ' + data.message);
+                    this.disabled = false;
+                    this.innerHTML = 'Launch';
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+                this.disabled = false;
+                this.innerHTML = 'Launch';
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

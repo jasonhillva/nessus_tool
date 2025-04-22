@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<h2>Create New Scan</h2>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Scan Configuration</h3>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('create_scan') }}">
+            <div class="mb-3">
+                <label for="name" class="form-label">Scan Name</label>
+                <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="targets" class="form-label">Targets</label>
+                <textarea class="form-control" id="targets" name="targets" rows="3" placeholder="IP addresses, hostnames, or CIDR notation (e.g., 192.168.1.1, example.com, 10.0.0.0/24)" required></textarea>
+                <div class="form-text">Enter one target per line or comma-separated.</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="template_uuid" class="form-label">Scan Template</label>
+                <select class="form-select" id="template_uuid" name="template_uuid" required>
+                    {% for template in templates %}
+                    <option value="{{ template.uuid }}">{{ template.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label for="folder_id" class="form-label">Folder</label>
+                <select class="form-select" id="folder_id" name="folder_id">
+                    <option value="">Default</option>
+                    {% for folder in folders %}
+                    <option value="{{ folder.id }}">{{ folder.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Create Scan</button>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
