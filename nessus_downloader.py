@@ -3,6 +3,51 @@ import os
 import getpass
 from nessus_client import NessusClient
 
+class NessusDownloader:
+    """Class to handle downloading scans from Nessus server"""
+    
+    def __init__(self, url, username, password, verify=False):
+        """Initialize the downloader with connection details"""
+        self.client = NessusClient(url, username, password, verify)
+        
+    def download_scan(self, scan_id, output_dir=".", filename=None):
+        """
+        Download a specific scan by ID
+        
+        Args:
+            scan_id (int): The ID of the scan to download
+            output_dir (str): Directory to save the scan to
+            filename (str, optional): Custom filename for the downloaded scan
+            
+        Returns:
+            str: Path to the downloaded file or None if download failed
+        """
+        # Ensure output directory exists
+        if not os.path.exists(output_dir):
+            try:
+                os.makedirs(output_dir)
+                print(f"[OK] Created output directory: {output_dir}")
+            except Exception as e:
+                print(f"[ERROR] Error creating directory: {str(e)}")
+                return None
+        
+        # Login to Nessus
+        if not self.client.token:
+            if not self.client.login():
+                print("[ERROR] Failed to log in to Nessus server")
+                return None
+        
+        # Download the scan
+        try:
+            file_path = self.client.export_and_download(scan_id, output_dir, filename)
+            return file_path
+        except Exception as e:
+            print(f"[ERROR] Error downloading scan: {str(e)}")
+            return None
+        finally:
+            # No need to logout as the client will handle this
+            pass
+
 def parse_selection(selection, max_value):
     """
     Parse user input for scan selection
