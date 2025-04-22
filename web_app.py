@@ -3,10 +3,10 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 import os
 import json
 from datetime import datetime
-from .nessus_client import NessusClient
-from .nessus_downloader import NessusDownloader
-from .nessus_parser import NessusParser
-from .nessus_converter import NessusConverter
+from nessus_client import NessusClient
+from nessus_downloader import NessusDownloader
+from nessus_parser import NessusParser
+from nessus_converter import NessusConverter
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
