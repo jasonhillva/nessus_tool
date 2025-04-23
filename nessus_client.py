@@ -2,8 +2,28 @@
 import os
 import time
 import json
+import logging
+import traceback
 import requests
 from urllib3.exceptions import InsecureRequestWarning
+import http.client as http_client
+
+# Set up detailed HTTP request logging
+http_client.HTTPConnection.debuglevel = 1
+requests_log = logging.getLogger("requests.packages.urllib3")
+requests_log.setLevel(logging.DEBUG)
+requests_log.propagate = True
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('nessus_client.log')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Suppress SSL warnings
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -22,12 +42,14 @@ class NessusClient:
         self.token = None
         self.headers = {'Content-Type': 'application/json'}
         
+        logger.info(f"Initializing Nessus client for {self.url}")
+        
     def login(self):
         """Login to Nessus server and get access token"""
         payload = {'username': self.username, 'password': self.password}
         
         try:
-            print(f"[DEBUG] Attempting to connect to {self.url} with verify={self.verify}")
+            logger.debug(f"Attempting to connect to {self.url} with verify={self.verify}")
             response = requests.post(
                 f"{self.url}/session",
                 data=json.dumps(payload),
@@ -38,21 +60,24 @@ class NessusClient:
             if response.status_code == 200:
                 self.token = response.json().get('token')
                 self.headers['X-Cookie'] = f"token={self.token}"
-                print("[OK] Successfully logged in to Nessus server")
+                logger.info("Successfully logged in to Nessus server")
                 return True
             else:
-                print(f"[ERROR] Login failed: {response.status_code} - {response.text}")
+                logger.error(f"Login failed: {response.status_code} - {response.text}")
                 return False
         except requests.exceptions.SSLError as e:
-            print(f"[ERROR] SSL Certificate error: {str(e)}")
-            print("[HINT] Your Nessus server likely uses a self-signed certificate. Try unchecking 'Verify SSL Certificate'")
+            logger.error(f"SSL Certificate error: {str(e)}")
+            logger.debug(traceback.format_exc())
+            logger.info("Your Nessus server likely uses a self-signed certificate. Try unchecking 'Verify SSL Certificate'")
             return False
         except requests.exceptions.ConnectionError as e:
-            print(f"[ERROR] Connection error: {str(e)}")
-            print("[HINT] Check if your Nessus server is running and the URL is correct")
+            logger.error(f"Connection error: {str(e)}")
+            logger.debug(traceback.format_exc())
+            logger.info("Check if your Nessus server is running and the URL is correct")
             return False
         except Exception as e:
-            print(f"[ERROR] Connection error: {str(e)}")
+            logger.error(f"Connection error: {str(e)}")
+            logger.debug(traceback.format_exc())
             return False
             
     def logout(self):
@@ -68,12 +93,13 @@ class NessusClient:
             )
             
             if response.status_code == 200:
-                print("[OK] Successfully logged out from Nessus server")
+                logger.info("Successfully logged out from Nessus server")
                 self.token = None
             else:
-                print(f"[ERROR] Logout failed: {response.status_code} - {response.text}")
+                logger.error(f"Logout failed: {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"[ERROR] Error during logout: {str(e)}")
+            logger.error(f"Error during logout: {str(e)}")
+            logger.debug(traceback.format_exc())
     
     def get_scans(self):
         """Get list of available scans"""
@@ -88,10 +114,11 @@ class NessusClient:
                 data = response.json()
                 return data.get('scans', [])
             else:
-                print(f"[ERROR] Failed to get scan list: {response.status_code} - {response.text}")
+                logger.error(f"Failed to get scan list: {response.status_code} - {response.text}")
                 return []
         except Exception as e:
-            print(f"[ERROR] Error retrieving scans: {str(e)}")
+            logger.error(f"Error retrieving scans: {str(e)}")
+            logger.debug(traceback.format_exc())
             return []
     
     def display_scans(self):
@@ -99,7 +126,7 @@ class NessusClient:
         scans = self.get_scans()
         
         if not scans:
-            print("No scans found on the server.")
+            logger.info("No scans found on the server.")
             return []
         
         print("\n=== Available Scans ===")
@@ -130,13 +157,14 @@ class NessusClient:
             
             if response.status_code == 200:
                 file_id = response.json().get('file')
-                print(f"[OK] Export requested for scan {scan_id}, file ID: {file_id}")
+                logger.info(f"Export requested for scan {scan_id}, file ID: {file_id}")
                 return file_id
             else:
-                print(f"[ERROR] Export request failed: {response.status_code} - {response.text}")
+                logger.error(f"Export request failed: {response.status_code} - {response.text}")
                 return None
         except Exception as e:
-            print(f"[ERROR] Error requesting export: {str(e)}")
+            logger.error(f"Error requesting export: {str(e)}")
+            logger.debug(traceback.format_exc())
             return None
     
     def check_export_status(self, scan_id, file_id):
@@ -151,10 +179,11 @@ class NessusClient:
             if response.status_code == 200:
                 return response.json().get('status')
             else:
-                print(f"[ERROR] Failed to check export status: {response.status_code} - {response.text}")
+                logger.error(f"Failed to check export status: {response.status_code} - {response.text}")
                 return None
         except Exception as e:
-            print(f"[ERROR] Error checking export status: {str(e)}")
+            logger.error(f"Error checking export status: {str(e)}")
+            logger.debug(traceback.format_exc())
             return None
     
     def download_export(self, scan_id, file_id, output_path, filename=None):
@@ -189,13 +218,14 @@ class NessusClient:
                         if chunk:
                             f.write(chunk)
                 
-                print(f"[OK] Downloaded to: {file_path}")
+                logger.info(f"Downloaded to: {file_path}")
                 return file_path
             else:
-                print(f"[ERROR] Download failed: {response.status_code} - {response.text}")
+                logger.error(f"Download failed: {response.status_code} - {response.text}")
                 return None
         except Exception as e:
-            print(f"[ERROR] Error downloading file: {str(e)}")
+            logger.error(f"Error downloading file: {str(e)}")
+            logger.debug(traceback.format_exc())
             return None
     
     def export_and_download(self, scan_id, output_path=".", filename=None, format_id="nessus", max_wait=300):
@@ -206,22 +236,22 @@ class NessusClient:
             return None
         
         # Wait for export to be ready
-        print(f"Waiting for export to complete...", end="", flush=True)
+        logger.info("Waiting for export to complete...")
         start_time = time.time()
         dots = 0
         
         while True:
             if time.time() - start_time > max_wait:
-                print("\n[ERROR] Export timed out after waiting too long")
+                logger.error("Export timed out after waiting too long")
                 return None
             
             status = self.check_export_status(scan_id, file_id)
             
             if status == "ready":
-                print("\n[OK] Export is ready!")
+                logger.info("Export is ready!")
                 break
             elif status == "error":
-                print("\n[ERROR] Export failed on server")
+                logger.error("Export failed on server")
                 return None
             
             # Simple progress indicator
@@ -242,19 +272,28 @@ class NessusClient:
             response = requests.get(
                 f"{self.url}/scans",
                 headers=self.headers,
-                verify=self.verify
+                verify=self.verify,
+                timeout=30  # Add timeout
             )
             
             if response.status_code == 200:
                 return response.json()
             else:
-                print(f"[ERROR] Failed to get scan list: {response.status_code} - {response.text}")
+                logger.error(f"Failed to get scan list: {response.status_code} - {response.text}")
                 return {"error": f"Failed to get scan list: {response.status_code}"}
+        except requests.exceptions.Timeout:
+            logger.error("Request timed out when retrieving scan list")
+            return {"error": "Connection timed out. The Nessus server might be busy."}
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error when retrieving scan list: {str(e)}")
+            logger.debug(traceback.format_exc())
+            return {"error": f"Connection error: {str(e)}"}
         except Exception as e:
-            print(f"[ERROR] Error retrieving scans: {str(e)}")
+            logger.error(f"Error retrieving scans: {str(e)}")
+            logger.debug(traceback.format_exc())
             return {"error": f"Error retrieving scans: {str(e)}"}
     
-    def create_scan(self, name, targets, template_uuid="731a8e52-3ea6-a291-ec0a-d2ff0619c19d", folder_id=None):
+    def create_scan(self, name, targets, template_uuid="731a8e52-3ea6-a291-ec0a-d2ff0619c19d", folder_id=None, max_retries=3):
         """
         Create a new scan with the specified name and targets.
         
@@ -263,6 +302,7 @@ class NessusClient:
             targets (str): Target IPs, hostnames, or ranges
             template_uuid (str): Template UUID to use (default is basic network scan)
             folder_id (int, optional): Folder ID to place the scan in
+            max_retries (int, optional): Maximum number of retry attempts (default is 3)
             
         Returns:
             dict: Response containing the created scan information
@@ -282,30 +322,63 @@ class NessusClient:
         if folder_id:
             scan_data["settings"]["folder_id"] = folder_id
         
-        try:
-            response = requests.post(
-                f"{self.url}/scans",
-                headers=self.headers,
-                data=json.dumps(scan_data),
-                verify=self.verify
-            )
-            
-            if response.status_code in [200, 201]:
-                print(f"[OK] Scan '{name}' created successfully")
-                return response.json()
+        retry_count = 0
+        last_error = None
+        
+        while retry_count < max_retries:
+            try:
+                logger.info(f"Creating scan attempt {retry_count + 1}/{max_retries}")
+                
+                response = requests.post(
+                    f"{self.url}/scans",
+                    headers=self.headers,
+                    data=json.dumps(scan_data),
+                    verify=self.verify,
+                    timeout=30  # 30 second timeout
+                )
+                
+                if response.status_code in [200, 201]:
+                    logger.info(f"Scan '{name}' created successfully")
+                    return response.json()
+                else:
+                    logger.error(f"Failed to create scan: {response.status_code} - {response.text}")
+                    last_error = f"Failed to create scan: {response.status_code}"
+                    
+            except requests.exceptions.Timeout:
+                logger.warning(f"Request timed out when creating scan (attempt {retry_count + 1}/{max_retries})")
+                last_error = "Connection timed out. The Nessus server might be busy."
+                
+            except requests.exceptions.ConnectionError as e:
+                logger.warning(f"Connection error when creating scan (attempt {retry_count + 1}/{max_retries}): {str(e)}")
+                logger.debug(traceback.format_exc())
+                last_error = f"Connection error: {str(e)}"
+                
+            except Exception as e:
+                logger.error(f"Error creating scan: {str(e)}")
+                logger.debug(traceback.format_exc())
+                last_error = f"Error creating scan: {str(e)}"
+                
+            # Only retry for connection and timeout errors
+            if isinstance(last_error, str) and ("Connection error" in last_error or "timed out" in last_error):
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = 2 ** retry_count  # Exponential backoff: 2, 4, 8 seconds
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                continue
             else:
-                print(f"[ERROR] Failed to create scan: {response.status_code} - {response.text}")
-                return {"error": f"Failed to create scan: {response.status_code}"}
-        except Exception as e:
-            print(f"[ERROR] Error creating scan: {str(e)}")
-            return {"error": f"Error creating scan: {str(e)}"}
+                # For other types of errors, don't retry
+                break
+        
+        return {"error": last_error or "Failed to create scan after multiple attempts"}
     
-    def launch_scan(self, scan_id):
+    def launch_scan(self, scan_id, max_retries=3):
         """
         Launch a scan with the specified ID.
         
         Args:
             scan_id (int): ID of the scan to launch
+            max_retries (int, optional): Maximum number of retry attempts (default is 3)
             
         Returns:
             dict: Response containing the scan launch information
@@ -314,22 +387,54 @@ class NessusClient:
             if not self.login():
                 return {"error": "Failed to login to Nessus server"}
         
-        try:
-            response = requests.post(
-                f"{self.url}/scans/{scan_id}/launch",
-                headers=self.headers,
-                verify=self.verify
-            )
-            
-            if response.status_code == 200:
-                print(f"[OK] Scan (ID: {scan_id}) launched successfully")
-                return response.json()
+        retry_count = 0
+        last_error = None
+        
+        while retry_count < max_retries:
+            try:
+                logger.info(f"Launching scan (ID: {scan_id}) attempt {retry_count + 1}/{max_retries}")
+                
+                response = requests.post(
+                    f"{self.url}/scans/{scan_id}/launch",
+                    headers=self.headers,
+                    verify=self.verify,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"Scan (ID: {scan_id}) launched successfully")
+                    return response.json()
+                else:
+                    logger.error(f"Failed to launch scan: {response.status_code} - {response.text}")
+                    last_error = f"Failed to launch scan: {response.status_code}"
+                    
+            except requests.exceptions.Timeout:
+                logger.warning(f"Request timed out when launching scan (attempt {retry_count + 1}/{max_retries})")
+                last_error = "Connection timed out. The Nessus server might be busy."
+                
+            except requests.exceptions.ConnectionError as e:
+                logger.warning(f"Connection error when launching scan (attempt {retry_count + 1}/{max_retries}): {str(e)}")
+                logger.debug(traceback.format_exc())
+                last_error = f"Connection error: {str(e)}"
+                
+            except Exception as e:
+                logger.error(f"Error launching scan: {str(e)}")
+                logger.debug(traceback.format_exc())
+                last_error = f"Error launching scan: {str(e)}"
+                
+            # Only retry for connection and timeout errors
+            if isinstance(last_error, str) and ("Connection error" in last_error or "timed out" in last_error):
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = 2 ** retry_count  # Exponential backoff: 2, 4, 8 seconds
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                continue
             else:
-                print(f"[ERROR] Failed to launch scan: {response.status_code} - {response.text}")
-                return {"error": f"Failed to launch scan: {response.status_code}"}
-        except Exception as e:
-            print(f"[ERROR] Error launching scan: {str(e)}")
-            return {"error": f"Error launching scan: {str(e)}"}
+                # For other types of errors, don't retry
+                break
+        
+        return {"error": last_error or "Failed to launch scan after multiple attempts"}
     
     def get_scan_details(self, scan_id):
         """
@@ -355,10 +460,11 @@ class NessusClient:
             if response.status_code == 200:
                 return response.json()
             else:
-                print(f"[ERROR] Failed to get scan details: {response.status_code} - {response.text}")
+                logger.error(f"Failed to get scan details: {response.status_code} - {response.text}")
                 return {"error": f"Failed to get scan details: {response.status_code}"}
         except Exception as e:
-            print(f"[ERROR] Error retrieving scan details: {str(e)}")
+            logger.error(f"Error retrieving scan details: {str(e)}")
+            logger.debug(traceback.format_exc())
             return {"error": f"Error retrieving scan details: {str(e)}"}
     
     def get_scan_templates(self):
@@ -376,16 +482,25 @@ class NessusClient:
             response = requests.get(
                 f"{self.url}/editor/scan/templates",
                 headers=self.headers,
-                verify=self.verify
+                verify=self.verify,
+                timeout=30  # Add timeout
             )
             
             if response.status_code == 200:
                 return response.json()
             else:
-                print(f"[ERROR] Failed to get scan templates: {response.status_code} - {response.text}")
+                logger.error(f"Failed to get scan templates: {response.status_code} - {response.text}")
                 return {"error": f"Failed to get scan templates: {response.status_code}"}
+        except requests.exceptions.Timeout:
+            logger.error("Request timed out when retrieving scan templates")
+            return {"error": "Connection timed out. The Nessus server might be busy."}
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error when retrieving scan templates: {str(e)}")
+            logger.debug(traceback.format_exc())
+            return {"error": f"Connection error: {str(e)}"}
         except Exception as e:
-            print(f"[ERROR] Error retrieving scan templates: {str(e)}")
+            logger.error(f"Error retrieving scan templates: {str(e)}")
+            logger.debug(traceback.format_exc())
             return {"error": f"Error retrieving scan templates: {str(e)}"}
     
     def get_folders(self):
@@ -403,14 +518,23 @@ class NessusClient:
             response = requests.get(
                 f"{self.url}/folders",
                 headers=self.headers,
-                verify=self.verify
+                verify=self.verify,
+                timeout=30  # Add timeout
             )
             
             if response.status_code == 200:
                 return response.json()
             else:
-                print(f"[ERROR] Failed to get folders: {response.status_code} - {response.text}")
+                logger.error(f"Failed to get folders: {response.status_code} - {response.text}")
                 return {"error": f"Failed to get folders: {response.status_code}"}
+        except requests.exceptions.Timeout:
+            logger.error("Request timed out when retrieving folders")
+            return {"error": "Connection timed out. The Nessus server might be busy."}
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error when retrieving folders: {str(e)}")
+            logger.debug(traceback.format_exc())
+            return {"error": f"Connection error: {str(e)}"}
         except Exception as e:
-            print(f"[ERROR] Error retrieving folders: {str(e)}")
+            logger.error(f"Error retrieving folders: {str(e)}")
+            logger.debug(traceback.format_exc())
             return {"error": f"Error retrieving folders: {str(e)}"}

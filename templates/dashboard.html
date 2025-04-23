@@ -1,17 +1,16 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<h2>Scan Dashboard</h2>
+<h2>Nessus Scan Manager</h2>
 
-<div class="mb-3">
-    <a href="{{ url_for('create_scan') }}" class="btn btn-primary">Create New Scan</a>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <h3>Available Scans</h3>
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h3 class="mb-0">Available Scans</h3>
     </div>
     <div class="card-body">
+        <div class="alert alert-info mb-3">
+            <i class="fas fa-info-circle"></i> Select a scan to download and export its results in CSV or Excel format.
+        </div>
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead>
@@ -42,14 +41,72 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-success launch-scan" data-scan-id="{{ scan.id }}">Launch</button>
-                                <a href="{{ url_for('download_scan', scan_id=scan.id) }}" class="btn btn-sm btn-primary">Download</a>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-success launch-scan" data-scan-id="{{ scan.id }}">
+                                        <i class="fas fa-play"></i> Launch
+                                    </button>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-download"></i> Export
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item" href="{{ url_for('download_scan', scan_id=scan.id, format='xlsx') }}">Excel (.xlsx)</a></li>
+                                            <li><a class="dropdown-item" href="{{ url_for('download_scan', scan_id=scan.id, format='csv') }}">CSV</a></li>
+                                            <li><a class="dropdown-item" href="{{ url_for('download_scan', scan_id=scan.id, format='nessus') }}">Nessus File</a></li>
+                                        </ul>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
                     {% else %}
                         <tr>
                             <td colspan="5" class="text-center">No scans available</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h3 class="mb-0">Recently Exported Files</h3>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Type</th>
+                        <th>Size</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if exports %}
+                        {% for export in exports %}
+                        <tr>
+                            <td>{{ export.filename }}</td>
+                            <td>{{ export.type }}</td>
+                            <td>{{ export.size }}</td>
+                            <td>{{ export.date }}</td>
+                            <td>
+                                <a href="{{ url_for('download_exported_file', filename=export.filename) }}" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-download"></i> Download
+                                </a>
+                                <button class="btn btn-sm btn-danger delete-file" data-filename="{{ export.filename }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">No exported files available</td>
                         </tr>
                     {% endif %}
                 </tbody>
@@ -70,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Disable button while request is in progress
             this.disabled = true;
-            this.innerHTML = 'Launching...';
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Launching...';
             
             fetch(`/launch-scan/${scanId}`, {
                 method: 'POST',
@@ -86,14 +143,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     alert('Failed to launch scan: ' + data.message);
                     this.disabled = false;
-                    this.innerHTML = 'Launch';
+                    this.innerHTML = '<i class="fas fa-play"></i> Launch';
                 }
             })
             .catch(error => {
                 alert('Error: ' + error);
                 this.disabled = false;
-                this.innerHTML = 'Launch';
+                this.innerHTML = '<i class="fas fa-play"></i> Launch';
             });
+        });
+    });
+    
+    // Handle delete file buttons
+    const deleteButtons = document.querySelectorAll('.delete-file');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const filename = this.getAttribute('data-filename');
+            if (confirm(`Are you sure you want to delete ${filename}?`)) {
+                fetch(`/delete-export/${filename}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to delete file: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                });
+            }
         });
     });
 });

@@ -1,12 +1,28 @@
 #!/usr/bin/env python3
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
 import os
 import json
+import logging
+import traceback
 from datetime import datetime
 from nessus_client import NessusClient
 from nessus_downloader import NessusDownloader
 from nessus_parser import NessusParser
 from nessus_converter import NessusConverter
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('nessus_tool.log')
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Log startup message
+logger.info("Nessus Tool starting up")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
@@ -59,23 +75,66 @@ def connect():
         flash('Successfully connected to Nessus server', 'success')
         return redirect(url_for('dashboard'))
     except Exception as e:
+        logger.error(f'Connection failed: {str(e)}')
+        logger.debug(traceback.format_exc())
         flash(f'Connection failed: {str(e)}', 'danger')
         return redirect(url_for('index'))
 
 @app.route('/dashboard')
 def dashboard():
-    """Show the main dashboard with scan list."""
+    """Show the main dashboard with scan list and exported files."""
     if not _is_connected():
         flash('Please connect to a Nessus server first', 'warning')
         return redirect(url_for('index'))
     
     client = _get_client()
     try:
+        # Get list of scans
         response = client.list_scans()
         scans = response.get('scans', [])
-        return render_template('dashboard.html', scans=scans)
+        
+        # Get list of exported files
+        exports = []
+        if os.path.exists(app.config['UPLOAD_FOLDER']):
+            for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                if os.path.isfile(file_path):
+                    # Get file stats
+                    stats = os.stat(file_path)
+                    size_bytes = stats.st_size
+                    modified_time = datetime.fromtimestamp(stats.st_mtime)
+                    
+                    # Determine file type
+                    file_type = "Unknown"
+                    if filename.lower().endswith('.xlsx'):
+                        file_type = "Excel"
+                    elif filename.lower().endswith('.csv'):
+                        file_type = "CSV"
+                    elif filename.lower().endswith('.nessus'):
+                        file_type = "Nessus"
+                    
+                    # Format size
+                    size_str = f"{size_bytes} bytes"
+                    if size_bytes > 1024 * 1024:
+                        size_str = f"{size_bytes / (1024 * 1024):.2f} MB"
+                    elif size_bytes > 1024:
+                        size_str = f"{size_bytes / 1024:.2f} KB"
+                    
+                    exports.append({
+                        'filename': filename,
+                        'type': file_type,
+                        'size': size_str,
+                        'date': modified_time.strftime('%Y-%m-%d %H:%M:%S')
+                    })
+            
+            # Sort by most recent first
+            exports.sort(key=lambda x: x['date'], reverse=True)
+            
+        return render_template('dashboard.html', scans=scans, exports=exports)
     except Exception as e:
-        flash(f'Failed to get scans: {str(e)}', 'danger')
+        logger.error(f'Failed to get dashboard data: {str(e)}')
+        logger.debug(traceback.format_exc())
+        flash(f'Failed to get data: {str(e)}', 'danger')
         return redirect(url_for('index'))
 
 @app.route('/create-scan', methods=['GET', 'POST'])
@@ -110,6 +169,8 @@ def create_scan():
                 else:
                     flash('Failed to create scan: Invalid response from server', 'danger')
         except Exception as e:
+            logger.error(f'Failed to create scan: {str(e)}')
+            logger.debug(traceback.format_exc())
             flash(f'Failed to create scan: {str(e)}', 'danger')
         
         return redirect(url_for('create_scan'))
@@ -122,6 +183,8 @@ def create_scan():
                               templates=templates.get('templates', []), 
                               folders=folders.get('folders', []))
     except Exception as e:
+        logger.error(f'Failed to get templates or folders: {str(e)}')
+        logger.debug(traceback.format_exc())
         flash(f'Failed to get templates or folders: {str(e)}', 'danger')
         return redirect(url_for('dashboard'))
 
@@ -138,43 +201,100 @@ def launch_scan(scan_id):
             return jsonify({'success': False, 'message': response['error']})
         return jsonify({'success': True, 'scan_uuid': response.get('scan_uuid')})
     except Exception as e:
+        logger.error(f'Failed to launch scan {scan_id}: {str(e)}')
+        logger.debug(traceback.format_exc())
         return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/download-scan/<int:scan_id>')
 def download_scan(scan_id):
-    """Download a scan by ID."""
+    """Download a scan by ID and convert to the selected format."""
     if not _is_connected():
         flash('Please connect to a Nessus server first', 'warning')
         return redirect(url_for('index'))
     
+    # Get the requested export format (default to xlsx)
+    export_format = request.args.get('format', 'xlsx').lower()
+    
     try:
+        # Get connection parameters from session
         url = session['nessus_url']
         username = session['nessus_username']
         password = session['nessus_password']
         verify_ssl = session['nessus_verify_ssl']
         
+        # First, download the Nessus scan file
         downloader = NessusDownloader(url, username, password, verify_ssl)
-        file_path = downloader.download_scan(scan_id, app.config['UPLOAD_FOLDER'])
+        nessus_file_path = downloader.download_scan(scan_id, app.config['UPLOAD_FOLDER'])
         
-        if not file_path:
+        if not nessus_file_path:
             flash(f'Failed to download scan with ID {scan_id}', 'danger')
             return redirect(url_for('dashboard'))
         
-        # Process the file
-        parser = NessusParser(file_path)
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        
+        # If user requested the raw .nessus file, we're done
+        if export_format == 'nessus':
+            flash(f'Scan downloaded to: {os.path.basename(nessus_file_path)}', 'success')
+            return redirect(url_for('dashboard'))
+        
+        # Parse the Nessus file
+        parser = NessusParser(nessus_file_path)
         parsed_data = parser.parse()
         
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        output_file = os.path.join(app.config['UPLOAD_FOLDER'], f'scan_{scan_id}_{timestamp}.xlsx')
-        
+        # Create converter for the appropriate format
         converter = NessusConverter()
-        converter.to_excel(parsed_data, output_file)
         
-        flash(f'Scan downloaded and converted to Excel: {output_file}', 'success')
+        if export_format == 'csv':
+            # Export to CSV
+            output_file = os.path.join(app.config['UPLOAD_FOLDER'], f'scan_{scan_id}_{timestamp}.csv')
+            converter.to_csv(parsed_data, output_file)
+            flash(f'Scan downloaded and converted to CSV: {os.path.basename(output_file)}', 'success')
+        else:
+            # Default to Excel
+            output_file = os.path.join(app.config['UPLOAD_FOLDER'], f'scan_{scan_id}_{timestamp}.xlsx')
+            converter.to_excel(parsed_data, output_file)
+            flash(f'Scan downloaded and converted to Excel: {os.path.basename(output_file)}', 'success')
+        
         return redirect(url_for('dashboard'))
     except Exception as e:
+        logger.error(f'Failed to download scan {scan_id}: {str(e)}')
+        logger.debug(traceback.format_exc())
         flash(f'Failed to download scan: {str(e)}', 'danger')
         return redirect(url_for('dashboard'))
+
+@app.route('/download-exported-file/<filename>')
+def download_exported_file(filename):
+    """Serve a previously exported file for download."""
+    if not _is_connected():
+        flash('Please connect to a Nessus server first', 'warning')
+        return redirect(url_for('index'))
+    
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    except Exception as e:
+        logger.error(f'Failed to download file {filename}: {str(e)}')
+        logger.debug(traceback.format_exc())
+        flash(f'Failed to download file: {str(e)}', 'danger')
+        return redirect(url_for('dashboard'))
+
+@app.route('/delete-export/<filename>', methods=['POST'])
+def delete_export(filename):
+    """Delete an exported file."""
+    if not _is_connected():
+        return jsonify({'success': False, 'message': 'Not connected to server'})
+    
+    try:
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'message': 'File not found'})
+    except Exception as e:
+        logger.error(f'Failed to delete file {filename}: {str(e)}')
+        logger.debug(traceback.format_exc())
+        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/logout')
 def logout():
