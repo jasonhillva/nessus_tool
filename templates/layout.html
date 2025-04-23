@@ -1,23 +1,77 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nessus Tool</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body {
             padding-top: 20px;
             padding-bottom: 20px;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
         .navbar {
             margin-bottom: 20px;
         }
+        .progress {
+            height: 20px;
+        }
+        .scan-progress-container {
+            margin-top: 5px;
+        }
+        #progress-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        #progress-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 600px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+        [data-bs-theme="dark"] #progress-content {
+            background-color: #212529;
+            color: white;
+        }
+        #progress-message {
+            margin-bottom: 10px;
+        }
+        #current-scan {
+            font-weight: bold;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
+    <!-- Progress overlay for batch operations -->
+    <div id="progress-overlay">
+        <div id="progress-content">
+            <h4>Processing Scans</h4>
+            <div id="progress-message">Downloading and processing scans...</div>
+            <div id="current-scan"></div>
+            <div class="progress">
+                <div id="overall-progress" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="mt-2">
+                <small class="text-muted">This may take several minutes for large scans</small>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <nav class="navbar navbar-expand-lg">
             <div class="container-fluid">
                 <a class="navbar-brand" href="{{ url_for('index') }}">Nessus Tool</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -29,21 +83,23 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('create_scan') }}">Create Scan</a>
-                        </li>
                         {% endif %}
                     </ul>
-                    {% if session.get('nessus_url') %}
                     <ul class="navbar-nav">
                         <li class="nav-item">
+                            <button id="theme-toggle" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-moon"></i> <span id="theme-text">Dark Mode</span>
+                            </button>
+                        </li>
+                        {% if session.get('nessus_url') %}
+                        <li class="nav-item ms-3">
                             <span class="nav-link text-muted">Connected to: {{ session.get('nessus_url') }}</span>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
                         </li>
+                        {% endif %}
                     </ul>
-                    {% endif %}
                 </div>
             </div>
         </nav>
@@ -60,6 +116,60 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Dark mode toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeText = document.getElementById('theme-text');
+            const themeIcon = themeToggle.querySelector('i');
+            const htmlElement = document.documentElement;
+            
+            // Check for saved theme preference
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                htmlElement.setAttribute('data-bs-theme', savedTheme);
+                updateThemeUI(savedTheme);
+            }
+            
+            // Theme toggle click handler
+            themeToggle.addEventListener('click', function() {
+                const currentTheme = htmlElement.getAttribute('data-bs-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                
+                htmlElement.setAttribute('data-bs-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                
+                updateThemeUI(newTheme);
+            });
+            
+            function updateThemeUI(theme) {
+                if (theme === 'dark') {
+                    themeIcon.className = 'fas fa-sun';
+                    themeText.textContent = 'Light Mode';
+                } else {
+                    themeIcon.className = 'fas fa-moon';
+                    themeText.textContent = 'Dark Mode';
+                }
+            }
+
+            // Global progress functionality
+            window.showProgress = function(message = 'Processing...') {
+                document.getElementById('progress-message').textContent = message;
+                document.getElementById('progress-overlay').style.display = 'flex';
+            };
+            
+            window.updateProgress = function(percent, currentItem = '') {
+                document.getElementById('overall-progress').style.width = percent + '%';
+                if (currentItem) {
+                    document.getElementById('current-scan').textContent = currentItem;
+                }
+            };
+            
+            window.hideProgress = function() {
+                document.getElementById('progress-overlay').style.display = 'none';
+            };
+        });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

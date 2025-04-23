@@ -11,8 +11,10 @@ setup(
     install_requires=[
         "pandas>=1.0.0",
         "openpyxl>=3.0.0",
+        "xlsxwriter>=3.0.0",  # Added for Excel formatting in batch exports
         "requests>=2.0.0",
         "flask>=2.0.0",  # Added Flask for web interface
+        "python-socketio>=5.0.0",  # Added for progress indicators
     ],
     entry_points={
         'console_scripts': [

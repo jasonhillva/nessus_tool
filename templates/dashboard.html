@@ -9,76 +9,108 @@
     </div>
     <div class="card-body">
         <div class="alert alert-info mb-3">
-            <i class="fas fa-info-circle"></i> Select a scan to download and export its results in CSV or Excel format.
+            <i class="fas fa-info-circle"></i> Select scans to download and export their results. You can select multiple scans to batch export.
         </div>
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Status</th>
-                        <th>Last Modified</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if scans %}
-                        {% for scan in scans %}
+        
+        <form id="batch-export-form" action="{{ url_for('batch_download_scans') }}" method="get">
+            <div class="mb-3">
+                <div class="btn-group">
+                    <button type="button" id="export-selected-btn" class="btn btn-primary">
+                        <i class="fas fa-download"></i> Export Selected Scans
+                    </button>
+                    <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown">
+                        <span class="visually-hidden">Toggle Dropdown</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><button type="button" class="dropdown-item export-format-option" data-format="xlsx">Excel (.xlsx)</button></li>
+                        <li><button type="button" class="dropdown-item export-format-option" data-format="csv">CSV</button></li>
+                        <li><button type="button" class="dropdown-item export-format-option" data-format="nessus">Nessus Files</button></li>
+                    </ul>
+                </div>
+                <button type="button" id="select-all-btn" class="btn btn-outline-secondary">Select All</button>
+                <button type="button" id="deselect-all-btn" class="btn btn-outline-secondary">Deselect All</button>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
                         <tr>
-                            <td>{{ scan.id }}</td>
-                            <td>{{ scan.name }}</td>
-                            <td>
-                                <span class="badge bg-{{ 'success' if scan.status == 'completed' else 'warning' if scan.status == 'running' else 'secondary' }}">
-                                    {{ scan.status }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if scan.last_modification_date %}
-                                    {{ scan.last_modification_date|timestamp_to_datetime }}
-                                {% else %}
-                                    Never
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="btn-group">
-                                    <button class="btn btn-sm btn-success launch-scan" data-scan-id="{{ scan.id }}">
-                                        <i class="fas fa-play"></i> Launch
-                                    </button>
+                            <th><input type="checkbox" id="select-all-header"></th>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Last Modified</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if scans %}
+                            {% for scan in scans %}
+                            <tr>
+                                <td><input type="checkbox" name="scan_ids" value="{{ scan.id }}" class="scan-checkbox"></td>
+                                <td>{{ scan.id }}</td>
+                                <td>{{ scan.name }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if scan.status == 'completed' else 'warning' if scan.status == 'running' else 'secondary' }}">
+                                        {{ scan.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if scan.last_modification_date %}
+                                        {{ scan.last_modification_date|timestamp_to_datetime }}
+                                    {% else %}
+                                        Never
+                                    {% endif %}
+                                </td>
+                                <td>
                                     <div class="dropdown">
                                         <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                                             <i class="fas fa-download"></i> Export
                                         </button>
                                         <ul class="dropdown-menu">
-                                            <li><a class="dropdown-item" href="{{ url_for('download_scan', scan_id=scan.id, format='xlsx') }}">Excel (.xlsx)</a></li>
-                                            <li><a class="dropdown-item" href="{{ url_for('download_scan', scan_id=scan.id, format='csv') }}">CSV</a></li>
-                                            <li><a class="dropdown-item" href="{{ url_for('download_scan', scan_id=scan.id, format='nessus') }}">Nessus File</a></li>
+                                            <li><a class="dropdown-item single-export" href="#" data-scan-id="{{ scan.id }}" data-format="xlsx" data-scan-name="{{ scan.name }}">Excel (.xlsx)</a></li>
+                                            <li><a class="dropdown-item single-export" href="#" data-scan-id="{{ scan.id }}" data-format="csv" data-scan-name="{{ scan.name }}">CSV</a></li>
+                                            <li><a class="dropdown-item single-export" href="#" data-scan-id="{{ scan.id }}" data-format="nessus" data-scan-name="{{ scan.name }}">Nessus File</a></li>
                                         </ul>
                                     </div>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center">No scans available</td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
+                                    <div class="scan-progress-container d-none" id="progress-{{ scan.id }}">
+                                        <div class="progress">
+                                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center">No scans available</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            <input type="hidden" name="format" id="export-format" value="xlsx">
+        </form>
     </div>
 </div>
 
 <div class="card">
-    <div class="card-header bg-info text-white">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
         <h3 class="mb-0">Recently Exported Files</h3>
+        <div>
+            <button type="button" id="delete-selected-files-btn" class="btn btn-danger" disabled>
+                <i class="fas fa-trash"></i> Delete Selected
+            </button>
+            <button type="button" id="select-all-files-btn" class="btn btn-outline-light btn-sm ms-2">Select All</button>
+            <button type="button" id="deselect-all-files-btn" class="btn btn-outline-light btn-sm ms-2">Deselect All</button>
+        </div>
     </div>
     <div class="card-body">
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead>
                     <tr>
+                        <th><input type="checkbox" id="select-all-files-header"></th>
                         <th>Filename</th>
                         <th>Type</th>
                         <th>Size</th>
@@ -90,6 +122,7 @@
                     {% if exports %}
                         {% for export in exports %}
                         <tr>
+                            <td><input type="checkbox" class="file-checkbox" value="{{ export.filename }}"></td>
                             <td>{{ export.filename }}</td>
                             <td>{{ export.type }}</td>
                             <td>{{ export.size }}</td>
@@ -106,7 +139,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="5" class="text-center">No exported files available</td>
+                            <td colspan="6" class="text-center">No exported files available</td>
                         </tr>
                     {% endif %}
                 </tbody>
@@ -119,64 +152,332 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const launchButtons = document.querySelectorAll('.launch-scan');
-    
-    launchButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const scanId = this.getAttribute('data-scan-id');
-            
-            // Disable button while request is in progress
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Launching...';
-            
-            fetch(`/launch-scan/${scanId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Scan launched successfully');
-                    location.reload();
-                } else {
-                    alert('Failed to launch scan: ' + data.message);
-                    this.disabled = false;
-                    this.innerHTML = '<i class="fas fa-play"></i> Launch';
-                }
-            })
-            .catch(error => {
-                alert('Error: ' + error);
-                this.disabled = false;
-                this.innerHTML = '<i class="fas fa-play"></i> Launch';
-            });
-        });
-    });
-    
     // Handle delete file buttons
     const deleteButtons = document.querySelectorAll('.delete-file');
     deleteButtons.forEach(button => {
         button.addEventListener('click', function() {
             const filename = this.getAttribute('data-filename');
             if (confirm(`Are you sure you want to delete ${filename}?`)) {
-                fetch(`/delete-export/${filename}`, {
-                    method: 'POST'
-                })
+                deleteFile(filename);
+            }
+        });
+    });
+    
+    // Handle select all checkbox in header
+    const selectAllHeader = document.getElementById('select-all-header');
+    const scanCheckboxes = document.querySelectorAll('.scan-checkbox');
+    
+    if (selectAllHeader) {
+        selectAllHeader.addEventListener('change', function() {
+            scanCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+    }
+    
+    // Handle select/deselect all buttons
+    const selectAllBtn = document.getElementById('select-all-btn');
+    const deselectAllBtn = document.getElementById('deselect-all-btn');
+    
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+            scanCheckboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            if (selectAllHeader) selectAllHeader.checked = true;
+        });
+    }
+    
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', function() {
+            scanCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            if (selectAllHeader) selectAllHeader.checked = false;
+        });
+    }
+    
+    // Handle single scan export with progress
+    const singleExportLinks = document.querySelectorAll('.single-export');
+    singleExportLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const scanId = this.getAttribute('data-scan-id');
+            const format = this.getAttribute('data-format');
+            const scanName = this.getAttribute('data-scan-name');
+            
+            // Show progress bar for this scan
+            const progressContainer = document.getElementById(`progress-${scanId}`);
+            const progressBar = progressContainer.querySelector('.progress-bar');
+            progressContainer.classList.remove('d-none');
+            progressBar.style.width = '0%';
+            
+            // Start progress animation
+            progressBar.style.width = '10%';
+            
+            // Show global progress
+            showProgress(`Exporting scan: ${scanName}`);
+            updateProgress(10, scanName);
+            
+            // Make AJAX request
+            fetch(`/download-scan/${scanId}?format=${format}&ajax=1`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        location.reload();
+                        // Update progress to 100%
+                        progressBar.style.width = '100%';
+                        updateProgress(100, `Completed: ${scanName}`);
+                        
+                        // If there's a download URL, redirect to it
+                        if (data.download_url) {
+                            window.location.href = data.download_url;
+                            setTimeout(() => {
+                                progressContainer.classList.add('d-none');
+                                hideProgress();
+                                // Refresh the page after download starts
+                                setTimeout(() => location.reload(), 1000);
+                            }, 1000);
+                        } else {
+                            // Just refresh the page
+                            setTimeout(() => {
+                                hideProgress();
+                                location.reload();
+                            }, 1000);
+                        }
                     } else {
-                        alert('Failed to delete file: ' + data.message);
+                        alert('Failed to export scan: ' + data.message);
+                        hideProgress();
+                        progressContainer.classList.add('d-none');
                     }
                 })
                 .catch(error => {
                     alert('Error: ' + error);
+                    hideProgress();
+                    progressContainer.classList.add('d-none');
                 });
-            }
         });
     });
+    
+    // Handle batch export with format selection
+    const exportFormatOptions = document.querySelectorAll('.export-format-option');
+    const exportFormatInput = document.getElementById('export-format');
+    const batchExportForm = document.getElementById('batch-export-form');
+    const exportSelectedBtn = document.getElementById('export-selected-btn');
+    
+    exportFormatOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            const format = this.getAttribute('data-format');
+            exportFormatInput.value = format;
+            startBatchExport();
+        });
+    });
+    
+    exportSelectedBtn.addEventListener('click', function() {
+        startBatchExport();
+    });
+    
+    function startBatchExport() {
+        const selected = document.querySelectorAll('input[name="scan_ids"]:checked');
+        if (selected.length === 0) {
+            alert('Please select at least one scan to export');
+            return;
+        }
+        
+        // Show global progress
+        const format = exportFormatInput.value;
+        const formatDisplay = format === 'xlsx' ? 'Excel' : format === 'csv' ? 'CSV' : 'Nessus';
+        showProgress(`Preparing ${selected.length} scans for ${formatDisplay} export`);
+        updateProgress(5, 'Starting export...');
+        
+        // Get selected scan IDs
+        const scanIds = Array.from(selected).map(checkbox => checkbox.value);
+        
+        // Make an AJAX request instead of submitting the form
+        const formData = new FormData();
+        scanIds.forEach(id => formData.append('scan_ids', id));
+        formData.append('format', format);
+        formData.append('ajax', '1');
+        
+        fetch('/batch-download-scans', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateProgress(100, 'Export complete!');
+                
+                // If there's a download URL, redirect to it
+                if (data.download_url) {
+                    window.location.href = data.download_url;
+                    setTimeout(() => {
+                        hideProgress();
+                        // Refresh the page after download starts
+                        setTimeout(() => location.reload(), 1000);
+                    }, 1000);
+                } else {
+                    // Just refresh the page
+                    setTimeout(() => {
+                        hideProgress();
+                        location.reload();
+                    }, 1000);
+                }
+            } else {
+                alert('Failed to export scans: ' + data.message);
+                hideProgress();
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error);
+            hideProgress();
+        });
+    }
+    
+    // Handle file select/deselect functionality
+    const selectAllFilesHeader = document.getElementById('select-all-files-header');
+    const fileCheckboxes = document.querySelectorAll('.file-checkbox');
+    const deleteSelectedFilesBtn = document.getElementById('delete-selected-files-btn');
+    const selectAllFilesBtn = document.getElementById('select-all-files-btn');
+    const deselectAllFilesBtn = document.getElementById('deselect-all-files-btn');
+    
+    // Function to update delete button status
+    function updateDeleteButtonStatus() {
+        const selectedCount = document.querySelectorAll('.file-checkbox:checked').length;
+        deleteSelectedFilesBtn.disabled = selectedCount === 0;
+        
+        // Update the text on the button to show count
+        if (selectedCount > 0) {
+            deleteSelectedFilesBtn.innerHTML = `<i class="fas fa-trash"></i> Delete Selected (${selectedCount})`;
+        } else {
+            deleteSelectedFilesBtn.innerHTML = `<i class="fas fa-trash"></i> Delete Selected`;
+        }
+    }
+    
+    // Add event listeners to all file checkboxes
+    fileCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateDeleteButtonStatus);
+    });
+    
+    // Handle select all files header checkbox
+    if (selectAllFilesHeader) {
+        selectAllFilesHeader.addEventListener('change', function() {
+            fileCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateDeleteButtonStatus();
+        });
+    }
+    
+    // Handle select all files button
+    if (selectAllFilesBtn) {
+        selectAllFilesBtn.addEventListener('click', function() {
+            fileCheckboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            if (selectAllFilesHeader) selectAllFilesHeader.checked = true;
+            updateDeleteButtonStatus();
+        });
+    }
+    
+    // Handle deselect all files button
+    if (deselectAllFilesBtn) {
+        deselectAllFilesBtn.addEventListener('click', function() {
+            fileCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            if (selectAllFilesHeader) selectAllFilesHeader.checked = false;
+            updateDeleteButtonStatus();
+        });
+    }
+    
+    // Handle the delete selected files button
+    if (deleteSelectedFilesBtn) {
+        deleteSelectedFilesBtn.addEventListener('click', function() {
+            const selectedFiles = document.querySelectorAll('.file-checkbox:checked');
+            if (selectedFiles.length === 0) {
+                return;
+            }
+            
+            const fileCount = selectedFiles.length;
+            if (confirm(`Are you sure you want to delete ${fileCount} file${fileCount > 1 ? 's' : ''}?`)) {
+                // Show progress
+                showProgress(`Deleting ${fileCount} file${fileCount > 1 ? 's' : ''}...`);
+                
+                // Get all selected filenames
+                const filenames = Array.from(selectedFiles).map(checkbox => checkbox.value);
+                let deletedCount = 0;
+                
+                // Delete files sequentially
+                const deleteNext = (index) => {
+                    if (index >= filenames.length) {
+                        // All files deleted
+                        updateProgress(100, 'Deletion complete!');
+                        setTimeout(() => {
+                            hideProgress();
+                            location.reload();
+                        }, 1000);
+                        return;
+                    }
+                    
+                    const filename = filenames[index];
+                    const percentComplete = Math.round((index / filenames.length) * 100);
+                    updateProgress(percentComplete, `Deleting ${filename}...`);
+                    
+                    fetch(`/delete-export/${encodeURIComponent(filename)}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            deletedCount++;
+                        }
+                        // Continue with next file regardless of success
+                        deleteNext(index + 1);
+                    })
+                    .catch(error => {
+                        console.error('Error deleting file:', error);
+                        // Continue with next file even if there's an error
+                        deleteNext(index + 1);
+                    });
+                };
+                
+                // Start deletion process
+                deleteNext(0);
+            }
+        });
+    }
+    
+    // Function to delete a single file
+    function deleteFile(filename) {
+        showProgress(`Deleting ${filename}...`);
+        fetch(`/delete-export/${encodeURIComponent(filename)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateProgress(100, 'File deleted successfully');
+                setTimeout(() => {
+                    hideProgress();
+                    location.reload();
+                }, 1000);
+            } else {
+                hideProgress();
+                alert('Failed to delete file: ' + data.message);
+            }
+        })
+        .catch(error => {
+            hideProgress();
+            alert('Error: ' + error);
+        });
+    }
 });
 </script>
 {% endblock %}

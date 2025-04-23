@@ -260,6 +260,30 @@ class NessusClient:
             time.sleep(3)
         
         # Download the export
+        # If no filename is provided, try to get the scan name from scan details
+        if not filename:
+            try:
+                scan_details = self.get_scan_details(scan_id)
+                if 'info' in scan_details and 'name' in scan_details['info']:
+                    scan_name = scan_details['info']['name']
+                    # Create a safe filename from scan name that ALWAYS includes the scan ID
+                    safe_name = "".join(c if c.isalnum() or c in ['-', '_', '.'] else '_' for c in scan_name)
+                    filename = f"{safe_name}_ScanID{scan_id}.nessus"
+                    logger.info(f"Using scan name from details: {filename}")
+                else:
+                    # Fallback with explicit ID in name
+                    filename = f"scan_ScanID{scan_id}.nessus"
+            except Exception as e:
+                logger.error(f"Error getting scan name: {str(e)}")
+                # Fallback with explicit ID in name
+                filename = f"scan_ScanID{scan_id}.nessus"
+        else:
+            # If filename is provided but doesn't include scan ID, add it
+            if not f"ScanID{scan_id}" in filename:
+                name_part, ext = os.path.splitext(filename)
+                filename = f"{name_part}_ScanID{scan_id}{ext}"
+        
+        logger.info(f"Downloading file for Scan ID: {scan_id} as {filename}")
         return self.download_export(scan_id, file_id, output_path, filename)
     
     def list_scans(self):

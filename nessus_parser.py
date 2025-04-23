@@ -68,28 +68,62 @@ class NessusParser:
             print(f"Error parsing {nessus_file}: {e}")
             return None, None
         
+        # Extract scan metadata
+        scan_metadata = {}
+        
         # Get report name
         report_name = os.path.basename(nessus_file)
         report_elements = root.findall(".//Report")
         if report_elements and 'name' in report_elements[0].attrib:
             report_name = report_elements[0].attrib['name']
+            scan_metadata['Report Name'] = report_name
         
-        # Get scan time
-        scan_time = ""
+        # Get policy name
+        policy_elements = root.findall(".//Policy/policyName")
+        if policy_elements and policy_elements[0].text:
+            scan_metadata['Policy Name'] = policy_elements[0].text
+        
+        # Extract scan time and other preferences
         pref_elements = root.findall(".//preference")
         for pref in pref_elements:
-            name = pref.find("name")
-            if name is not None and name.text == "report_host_details":
-                value = pref.find("value")
-                if value is not None:
-                    scan_time = value.text
+            name_elem = pref.find("name")
+            value_elem = pref.find("value")
+            
+            if name_elem is not None and value_elem is not None:
+                name_text = name_elem.text
+                value_text = value_elem.text
+                
+                if name_text == "report_host_details":
+                    scan_metadata['Scan Time'] = value_text
+                elif name_text == "report_paranoia":
+                    scan_metadata['Report Paranoia'] = value_text
+                elif name_text == "stop_scan_on_disconnect":
+                    scan_metadata['Stop Scan on Disconnect'] = value_text
+                elif name_text == "scan_start_time":
+                    scan_metadata['Scan Start Time'] = value_text
+                elif name_text == "scan_duration":
+                    scan_metadata['Scan Duration'] = value_text
+        
+        # Extract target information from the policy (even if no hosts were found)
+        target_list = []
+        target_elements = root.findall(".//Preferences/ServerPreferences/preference")
+        for pref in target_elements:
+            name_elem = pref.find("name")
+            if name_elem is not None and name_elem.text == "TARGET":
+                value_elem = pref.find("value")
+                if value_elem is not None:
+                    targets = value_elem.text.split(",")
+                    target_list.extend([t.strip() for t in targets])
+                    scan_metadata['Targets'] = ", ".join([t.strip() for t in targets])
         
         # Extract host information and vulnerabilities
         vulnerabilities = []
+        hosts_found = []
         
         # Find all ReportHost elements
         for host in root.findall(".//ReportHost"):
             host_name = host.attrib.get('name', 'Unknown')
+            hosts_found.append(host_name)
             
             # Get IP, FQDN, and operating system if available
             ip_address = host_name
@@ -160,6 +194,91 @@ class NessusParser:
                     'Description': description,
                     'Solution': solution
                 })
+        
+        if hosts_found:
+            scan_metadata['Hosts Found'] = ", ".join(hosts_found)
+        
+        # If no hosts were found but we have target information, create a placeholder entry
+        if not vulnerabilities and target_list:
+            print(f"No vulnerabilities found in {nessus_file}. Creating placeholder entry for targets: {target_list}")
+            for target in target_list:
+                entry = {
+                    'Host': target,
+                    'IP Address': target,
+                    'FQDN': '',
+                    'Operating System': '',
+                    'Port': '',
+                    'Protocol': '',
+                    'Plugin ID': '',
+                    'Plugin Name': 'No vulnerabilities found',
+                    'Severity': 'Info',
+                    'Risk Factor': '',
+                    'CVSS Base Score': '',
+                    'CVSS3 Base Score': '',
+                    'CVE': '',
+                    'Description': f'The scan did not find any vulnerabilities for target {target}.',
+                    'Solution': ''
+                }
+                
+                # Add scan metadata to entry
+                for key, value in scan_metadata.items():
+                    if key not in entry:  # Avoid overwriting existing keys
+                        entry[key] = value
+                
+                vulnerabilities.append(entry)
+        elif not vulnerabilities and hosts_found:
+            print(f"Hosts found but no vulnerabilities in {nessus_file}. Creating placeholder entries for hosts: {hosts_found}")
+            for host in hosts_found:
+                entry = {
+                    'Host': host,
+                    'IP Address': host,
+                    'FQDN': '',
+                    'Operating System': '',
+                    'Port': '',
+                    'Protocol': '',
+                    'Plugin ID': '',
+                    'Plugin Name': 'No vulnerabilities found',
+                    'Severity': 'Info',
+                    'Risk Factor': '',
+                    'CVSS Base Score': '',
+                    'CVSS3 Base Score': '',
+                    'CVE': '',
+                    'Description': f'The scan did not find any vulnerabilities for host {host}.',
+                    'Solution': ''
+                }
+                
+                # Add scan metadata to entry
+                for key, value in scan_metadata.items():
+                    if key not in entry:  # Avoid overwriting existing keys
+                        entry[key] = value
+                
+                vulnerabilities.append(entry)
+        elif not vulnerabilities and not target_list and not hosts_found:
+            print(f"No hosts or targets found in {nessus_file}. Creating a generic placeholder entry.")
+            entry = {
+                'Host': 'Unknown',
+                'IP Address': 'Unknown',
+                'FQDN': '',
+                'Operating System': '',
+                'Port': '',
+                'Protocol': '',
+                'Plugin ID': '',
+                'Plugin Name': 'Empty scan results',
+                'Severity': 'Info',
+                'Risk Factor': '',
+                'CVSS Base Score': '',
+                'CVSS3 Base Score': '',
+                'CVE': '',
+                'Description': 'This scan did not contain any host or vulnerability data.',
+                'Solution': ''
+            }
+            
+            # Add scan metadata to entry
+            for key, value in scan_metadata.items():
+                if key not in entry:  # Avoid overwriting existing keys
+                    entry[key] = value
+            
+            vulnerabilities.append(entry)
         
         # Convert to DataFrame
         if vulnerabilities:

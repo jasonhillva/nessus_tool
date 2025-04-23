@@ -23,9 +23,9 @@
                         <input type="password" class="form-control" id="password" name="password" required>
                     </div>
                     <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="verify_ssl" name="verify_ssl" checked>
+                        <input type="checkbox" class="form-check-input" id="verify_ssl" name="verify_ssl">
                         <label class="form-check-label" for="verify_ssl">Verify SSL Certificate</label>
-                        <div class="form-text">Uncheck if your Nessus scanner uses a self-signed certificate</div>
+                        <div class="form-text">Most Nessus scanners use self-signed certificates. Leave unchecked for typical setups. Only check if your Nessus scanner has a valid certificate signed by a trusted CA.</div>
                     </div>
                     <button type="submit" class="btn btn-primary">Connect</button>
                 </form>
